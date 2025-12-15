@@ -29,9 +29,8 @@ class UpdateStatus(Enum):
 class Database:
     def __init__(self, db_path: str = None):
         if db_path is None:
-            app_data = Path.home() / ".installer_manager"
-            app_data.mkdir(exist_ok=True)
-            db_path = str(app_data / "installer_manager.db")
+            app_dir = Path(__file__).parent.parent
+            db_path = str(app_dir / "installer_manager.db")
         
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
