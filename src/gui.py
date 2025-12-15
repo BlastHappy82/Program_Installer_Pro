@@ -626,9 +626,10 @@ class InstallerManagerGUI:
         if file_path:
             installer = self.db.get_installer_by_path(file_path)
             if not installer:
+                from pathlib import Path
                 from .scanner import InstallerScanner
                 scanner = InstallerScanner(self.installer_folder, False)
-                info = scanner._parse_installer_file(file_path)
+                info = scanner._analyze_installer(Path(file_path))
                 if info:
                     installer_id = self.db.add_installer(**info)
                     installer = self.db.get_installer(installer_id)
