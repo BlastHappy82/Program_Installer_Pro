@@ -13,10 +13,8 @@ import tkinter as tk
 from pathlib import Path
 from typing import Optional, List, Dict, Callable
 
-from .database import Database, InstallerStatus, UpdateStatus
+from .database import Database, InstallerStatus
 from .scanner import InstallerScanner, InstalledProgramScanner, ProgramMatcher
-from .updater import UpdateChecker
-from .downloader import DownloadManager
 from .installer import InstallationExecutor, InstallationQueue
 from .launcher import StartupManager
 
@@ -56,8 +54,6 @@ class InstallerManagerGUI:
         set_dark_title_bar(self.root)
         
         self.db = Database()
-        self.update_checker = UpdateChecker()
-        self.download_manager = DownloadManager()
         self.executor = InstallationExecutor()
         self.startup_manager = StartupManager()
         
@@ -174,7 +170,6 @@ class InstallerManagerGUI:
         self.notebook.pack(fill=BOTH, expand=YES, pady=(10, 10))
         
         self._create_installers_tab()
-        self._create_updates_tab()
         self._create_installed_tab()
         self._create_queue_tab()
         
@@ -219,20 +214,12 @@ class InstallerManagerGUI:
             command=self._add_selected_to_queue,
             bootstyle="info",
             width=14
-        ).pack(side=LEFT, padx=(0, 8))
-        
-        ttk.Button(
-            toolbar, 
-            text="Check Updates",
-            command=self._check_selected_updates,
-            bootstyle="warning",
-            width=14
         ).pack(side=LEFT)
         
         tree_frame = ttk.Frame(tab)
         tree_frame.pack(fill=BOTH, expand=YES)
         
-        columns = ('name', 'version', 'type', 'size', 'update_status')
+        columns = ('name', 'version', 'type', 'size')
         self.installers_tree = ttk.Treeview(
             tree_frame, 
             columns=columns, 
@@ -245,13 +232,11 @@ class InstallerManagerGUI:
         self.installers_tree.heading('version', text='Version', anchor=W)
         self.installers_tree.heading('type', text='Type', anchor=CENTER)
         self.installers_tree.heading('size', text='Size', anchor=E)
-        self.installers_tree.heading('update_status', text='Update Status', anchor=W)
         
-        self.installers_tree.column('name', width=280, minwidth=200)
-        self.installers_tree.column('version', width=100, minwidth=80)
-        self.installers_tree.column('type', width=70, minwidth=50, anchor=CENTER)
-        self.installers_tree.column('size', width=90, minwidth=70, anchor=E)
-        self.installers_tree.column('update_status', width=160, minwidth=120)
+        self.installers_tree.column('name', width=350, minwidth=200)
+        self.installers_tree.column('version', width=120, minwidth=80)
+        self.installers_tree.column('type', width=80, minwidth=50, anchor=CENTER)
+        self.installers_tree.column('size', width=100, minwidth=70, anchor=E)
         
         scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.installers_tree.yview, bootstyle="primary-round")
         self.installers_tree.configure(yscrollcommand=scrollbar.set)
@@ -261,70 +246,6 @@ class InstallerManagerGUI:
         
         self.installers_tree.bind('<Double-1>', self._on_installer_double_click)
         self.installers_tree.bind('<Button-3>', self._show_installer_context_menu)
-    
-    def _create_updates_tab(self):
-        """Create the Update Installers tab."""
-        tab = ttk.Frame(self.notebook, padding=15)
-        self.notebook.add(tab, text="  Update Installers  ")
-        
-        toolbar = ttk.Frame(tab)
-        toolbar.pack(fill=X, pady=(0, 15))
-        
-        ttk.Button(
-            toolbar, 
-            text="Check All Updates",
-            command=self._check_all_updates,
-            bootstyle="warning",
-            width=16
-        ).pack(side=LEFT, padx=(0, 8))
-        
-        ttk.Button(
-            toolbar, 
-            text="Download Selected",
-            command=self._download_selected_updates,
-            bootstyle="success",
-            width=16
-        ).pack(side=LEFT, padx=(0, 8))
-        
-        ttk.Button(
-            toolbar, 
-            text="Download All Updates",
-            command=self._download_all_updates,
-            bootstyle="success-outline",
-            width=18
-        ).pack(side=LEFT)
-        
-        tree_frame = ttk.Frame(tab)
-        tree_frame.pack(fill=BOTH, expand=YES)
-        
-        columns = ('name', 'current', 'latest', 'status', 'action')
-        self.updates_tree = ttk.Treeview(
-            tree_frame, 
-            columns=columns, 
-            show='headings', 
-            selectmode='extended',
-            bootstyle="info"
-        )
-        
-        self.updates_tree.heading('name', text='Program Name', anchor=W)
-        self.updates_tree.heading('current', text='Current Version', anchor=W)
-        self.updates_tree.heading('latest', text='Latest Version', anchor=W)
-        self.updates_tree.heading('status', text='Status', anchor=W)
-        self.updates_tree.heading('action', text='Action', anchor=CENTER)
-        
-        self.updates_tree.column('name', width=280, minwidth=200)
-        self.updates_tree.column('current', width=130, minwidth=100)
-        self.updates_tree.column('latest', width=130, minwidth=100)
-        self.updates_tree.column('status', width=150, minwidth=120)
-        self.updates_tree.column('action', width=100, minwidth=80, anchor=CENTER)
-        
-        scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.updates_tree.yview, bootstyle="info-round")
-        self.updates_tree.configure(yscrollcommand=scrollbar.set)
-        
-        self.updates_tree.pack(side=LEFT, fill=BOTH, expand=YES)
-        scrollbar.pack(side=RIGHT, fill=Y)
-        
-        self.updates_tree.bind('<Double-1>', self._on_update_double_click)
     
     def _create_installed_tab(self):
         """Create the Installed Programs tab."""
@@ -340,29 +261,36 @@ class InstallerManagerGUI:
             command=self._scan_installed,
             bootstyle="info",
             width=14
-        ).pack(side=LEFT, padx=(0, 8))
+        ).pack(side=LEFT, padx=(0, 15))
+        
+        ttk.Label(toolbar, text="Filter:", font=("-size", 10)).pack(side=LEFT, padx=(0, 5))
+        
+        self.installed_filter_var = tk.StringVar(value="All Programs")
+        filter_combo = ttk.Combobox(
+            toolbar,
+            textvariable=self.installed_filter_var,
+            values=["All Programs", "Without Installers", "With Installers", "Hidden", "Manually Linked"],
+            state="readonly",
+            width=18,
+            bootstyle="secondary"
+        )
+        filter_combo.pack(side=LEFT, padx=(0, 15))
+        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_installed_list())
         
         ttk.Button(
-            toolbar, 
-            text="Download Missing",
-            command=self._download_missing_installers,
-            bootstyle="success",
-            width=16
-        ).pack(side=LEFT, padx=(0, 20))
-        
-        self.show_orphans_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            toolbar, 
-            text="Show only programs without installers",
-            variable=self.show_orphans_var,
-            command=self._refresh_installed_list,
-            bootstyle="warning-round-toggle"
+            toolbar,
+            text="Show Hidden",
+            command=self._toggle_show_hidden,
+            bootstyle="secondary-outline",
+            width=12
         ).pack(side=LEFT)
+        
+        self.show_hidden = False
         
         tree_frame = ttk.Frame(tab)
         tree_frame.pack(fill=BOTH, expand=YES)
         
-        columns = ('name', 'version', 'publisher', 'has_installer', 'action')
+        columns = ('name', 'version', 'publisher', 'status')
         self.installed_tree = ttk.Treeview(
             tree_frame, 
             columns=columns, 
@@ -374,20 +302,20 @@ class InstallerManagerGUI:
         self.installed_tree.heading('name', text='Program Name', anchor=W)
         self.installed_tree.heading('version', text='Version', anchor=W)
         self.installed_tree.heading('publisher', text='Publisher', anchor=W)
-        self.installed_tree.heading('has_installer', text='Has Installer', anchor=CENTER)
-        self.installed_tree.heading('action', text='Action', anchor=CENTER)
+        self.installed_tree.heading('status', text='Status', anchor=CENTER)
         
-        self.installed_tree.column('name', width=320, minwidth=250)
+        self.installed_tree.column('name', width=350, minwidth=250)
         self.installed_tree.column('version', width=120, minwidth=80)
-        self.installed_tree.column('publisher', width=180, minwidth=120)
-        self.installed_tree.column('has_installer', width=100, minwidth=80, anchor=CENTER)
-        self.installed_tree.column('action', width=100, minwidth=80, anchor=CENTER)
+        self.installed_tree.column('publisher', width=200, minwidth=120)
+        self.installed_tree.column('status', width=130, minwidth=100, anchor=CENTER)
         
         scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.installed_tree.yview, bootstyle="secondary-round")
         self.installed_tree.configure(yscrollcommand=scrollbar.set)
         
         self.installed_tree.pack(side=LEFT, fill=BOTH, expand=YES)
         scrollbar.pack(side=RIGHT, fill=Y)
+        
+        self.installed_tree.bind('<Button-3>', self._show_installed_context_menu)
     
     def _create_queue_tab(self):
         """Create the Installation Queue tab."""
@@ -536,8 +464,7 @@ class InstallerManagerGUI:
                     i.get('detected_name') or i.get('file_name'),
                     i.get('detected_version') or 'Unknown',
                     i.get('file_type', '').upper(),
-                    s,
-                    'Not checked'
+                    s
                 ), tags=(i.get('file_path'),)))
             
             self.root.after(0, lambda: self._finish_scan(len(installers)))
@@ -549,115 +476,6 @@ class InstallerManagerGUI:
         self.progress.stop()
         self.progress.configure(mode='determinate')
         self.status_var.set(f"Found {count} installer(s)")
-    
-    def _check_all_updates(self):
-        """Check updates for all installers."""
-        self.status_var.set("Checking for updates...")
-        self.progress.configure(mode='determinate')
-        self.progress['value'] = 0
-        
-        def check():
-            installers = self.db.get_all_installers()
-            total = len(installers)
-            
-            for item in self.updates_tree.get_children():
-                self.updates_tree.delete(item)
-            
-            for i, installer in enumerate(installers):
-                name = installer.get('detected_name') or installer.get('file_name')
-                version = installer.get('detected_version')
-                
-                update_info = self.update_checker.check_update(name, version)
-                
-                self.db.update_installer_update_status(
-                    installer['id'],
-                    update_info['status'],
-                    update_info.get('latest_version'),
-                    update_info.get('download_url')
-                )
-                
-                action = ''
-                if update_info['status'] == 'update_available':
-                    action = 'Download'
-                elif update_info['status'] == 'update_not_found':
-                    action = 'Set URL'
-                
-                self.root.after(0, lambda inst=installer, info=update_info, act=action: 
-                    self.updates_tree.insert('', 'end', values=(
-                        inst.get('detected_name') or inst.get('file_name'),
-                        inst.get('detected_version') or 'Unknown',
-                        info.get('latest_version') or 'Unknown',
-                        info['status'].replace('_', ' ').title(),
-                        act
-                    ), tags=(str(inst['id']),)))
-                
-                progress = int((i + 1) / total * 100)
-                self.root.after(0, lambda p=progress: self.progress.configure(value=p))
-            
-            self.root.after(0, lambda: self.status_var.set(f"Update check complete"))
-        
-        threading.Thread(target=check, daemon=True).start()
-    
-    def _check_selected_updates(self):
-        """Check updates for selected installers."""
-        selected = self.installers_tree.selection()
-        if not selected:
-            Messagebox.show_info("Please select installers to check for updates", title="Info")
-            return
-        
-        self.notebook.select(1)
-        self._check_all_updates()
-    
-    def _download_selected_updates(self):
-        """Download updates for selected items."""
-        selected = self.updates_tree.selection()
-        if not selected:
-            Messagebox.show_info("Please select items to download", title="Info")
-            return
-        
-        for item in selected:
-            tags = self.updates_tree.item(item, 'tags')
-            if tags:
-                installer_id = int(tags[0])
-                installer = self.db.get_installer(installer_id)
-                if installer and installer.get('download_url'):
-                    self._start_download(installer)
-    
-    def _download_all_updates(self):
-        """Download all available updates."""
-        installers = self.db.get_all_installers()
-        updates = [i for i in installers if i.get('update_status') == 'update_available' and i.get('download_url')]
-        
-        if not updates:
-            Messagebox.show_info("No updates available to download", title="Info")
-            return
-        
-        if Messagebox.yesno(f"Download {len(updates)} update(s)?", title="Confirm") == "Yes":
-            for installer in updates:
-                self._start_download(installer)
-    
-    def _start_download(self, installer: Dict):
-        """Start downloading an installer update."""
-        url = installer.get('custom_download_url') or installer.get('download_url')
-        if not url:
-            return
-        
-        filename = f"{installer.get('detected_name', 'installer')}_{installer.get('latest_version', 'latest')}.exe"
-        
-        self.download_manager.set_download_folder(self.installer_folder)
-        
-        def on_progress(downloaded, total, percentage):
-            self.root.after(0, lambda: self.progress.configure(value=percentage))
-        
-        def on_complete(success, path, error):
-            if success:
-                self.root.after(0, lambda: self.status_var.set(f"Downloaded: {filename}"))
-                self._scan_installers()
-            else:
-                self.root.after(0, lambda: Messagebox.show_error(error or "Unknown error", title="Download Failed"))
-        
-        self.status_var.set(f"Downloading {filename}...")
-        self.download_manager.download_async(url, filename, on_progress, on_complete)
     
     def _scan_installed(self):
         """Scan for installed programs."""
@@ -717,58 +535,130 @@ class InstallerManagerGUI:
     
     def _refresh_installed_list(self):
         """Refresh the installed programs list based on filter."""
-        if self.show_orphans_var.get():
+        filter_val = self.installed_filter_var.get()
+        
+        if filter_val == "Without Installers":
             programs = self.db.get_programs_without_installers()
+        elif filter_val == "Hidden":
+            programs = self.db.get_hidden_programs()
+        elif filter_val == "Manually Linked":
+            programs = self.db.get_manually_linked_programs()
+        elif filter_val == "With Installers":
+            programs = self.db.get_programs_with_installers()
         else:
-            programs = self.db.get_all_installed_programs()
+            programs = self.db.get_all_installed_programs(include_hidden=self.show_hidden)
         
         for item in self.installed_tree.get_children():
             self.installed_tree.delete(item)
         
         for program in programs:
-            has_installer = "Yes" if program.get('has_installer') else "No"
-            action = "" if program.get('has_installer') else "Find Installer"
+            if program.get('is_hidden'):
+                status = "Hidden"
+            elif program.get('manually_linked'):
+                status = "Linked"
+            elif program.get('has_installer'):
+                status = "Has Installer"
+            else:
+                status = "No Installer"
             
             self.installed_tree.insert('', 'end', values=(
                 program.get('display_name') or program.get('name'),
                 program.get('version') or 'Unknown',
                 program.get('publisher') or 'Unknown',
-                has_installer,
-                action
+                status
             ), tags=(str(program['id']),))
     
-    def _download_missing_installers(self):
-        """Download installers for programs that don't have one."""
-        orphans = self.db.get_programs_without_installers()
-        if not orphans:
-            Messagebox.show_info("All installed programs have corresponding installers", title="Info")
-            return
-        
-        found = 0
-        for program in orphans:
-            name = program.get('display_name') or program.get('name')
-            version = program.get('version')
+    def _toggle_show_hidden(self):
+        """Toggle showing hidden programs."""
+        self.show_hidden = not self.show_hidden
+        self._refresh_installed_list()
+    
+    def _show_installed_context_menu(self, event):
+        """Show context menu for installed programs."""
+        item = self.installed_tree.identify_row(event.y)
+        if item:
+            self.installed_tree.selection_set(item)
             
-            update_info = self.update_checker.check_update(name, version)
+            menu = tk.Menu(self.root, tearoff=0)
             
-            if update_info.get('download_url'):
-                found += 1
-        
-        if found > 0:
-            if Messagebox.yesno(f"Found download URLs for {found} program(s). Download them?", title="Download") == "Yes":
-                for program in orphans:
-                    name = program.get('display_name') or program.get('name')
-                    update_info = self.update_checker.check_update(name, None)
+            tags = self.installed_tree.item(item, 'tags')
+            if tags:
+                program_id = int(tags[0])
+                program = self.db.get_installed_program(program_id)
+                
+                if program:
+                    if program.get('is_hidden'):
+                        menu.add_command(label="Unhide Program", command=lambda: self._unhide_program(program_id))
+                    else:
+                        menu.add_command(label="Hide Program", command=lambda: self._hide_program(program_id))
                     
-                    if update_info.get('download_url'):
-                        installer_info = {
-                            'detected_name': name,
-                            'latest_version': update_info.get('latest_version'),
-                            'download_url': update_info.get('download_url')
-                        }
-                        self._start_download(installer_info)
+                    menu.add_separator()
+                    menu.add_command(label="Link to Installer...", command=lambda: self._link_to_installer(program_id))
+                    
+                    if program.get('manually_linked'):
+                        menu.add_command(label="Remove Link", command=lambda: self._remove_installer_link(program_id))
+                    
+                    menu.add_separator()
+                    menu.add_command(label="Set as Parent (Group)", command=lambda: self._set_as_parent(program_id))
+                    
+            menu.post(event.x_root, event.y_root)
+    
+    def _hide_program(self, program_id: int):
+        """Hide a program from the list."""
+        self.db.hide_program(program_id)
+        self._refresh_installed_list()
+        self.status_var.set("Program hidden")
+    
+    def _unhide_program(self, program_id: int):
+        """Unhide a program."""
+        self.db.unhide_program(program_id)
+        self._refresh_installed_list()
+        self.status_var.set("Program unhidden")
+    
+    def _link_to_installer(self, program_id: int):
+        """Link a program to an installer file."""
+        file_path = filedialog.askopenfilename(
+            title="Select Installer File",
+            initialdir=self.installer_folder,
+            filetypes=[("Installer files", "*.exe *.msi"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            installer = self.db.get_installer_by_path(file_path)
+            if not installer:
+                from .scanner import InstallerScanner
+                scanner = InstallerScanner(self.installer_folder, False)
+                info = scanner._parse_installer_file(file_path)
+                if info:
+                    installer_id = self.db.add_installer(**info)
+                    installer = self.db.get_installer(installer_id)
+            
+            if installer:
+                self.db.link_program_to_installer(program_id, installer['id'])
+                self._refresh_installed_list()
+                self.status_var.set("Program linked to installer")
+    
+    def _remove_installer_link(self, program_id: int):
+        """Remove installer link from a program."""
+        self.db.unlink_program_from_installer(program_id)
+        self._refresh_installed_list()
+        self.status_var.set("Installer link removed")
+    
+    def _set_as_parent(self, program_id: int):
+        """Set a program as parent for grouping related programs."""
+        selected = self.installed_tree.selection()
+        if len(selected) > 1:
+            parent_id = program_id
+            for item in selected:
+                tags = self.installed_tree.item(item, 'tags')
+                if tags:
+                    child_id = int(tags[0])
+                    if child_id != parent_id:
+                        self.db.set_program_parent(child_id, parent_id)
+            self._refresh_installed_list()
+            self.status_var.set("Programs grouped")
         else:
-            Messagebox.show_info("Could not find download URLs for any of the missing installers", title="Info")
+            Messagebox.show_info("Select multiple programs first, then right-click the parent program", title="Info")
     
     def _add_selected_to_queue(self):
         """Add selected installers to the installation queue."""
@@ -916,17 +806,10 @@ class InstallerManagerGUI:
         if item:
             self._add_selected_to_queue()
     
-    def _on_update_double_click(self, event):
-        """Handle double-click on update item."""
-        item = self.updates_tree.selection()
-        if item:
-            self._download_selected_updates()
-    
     def _show_installer_context_menu(self, event):
         """Show context menu for installers."""
         menu = tk.Menu(self.root, tearoff=0)
         menu.add_command(label="Add to Queue", command=self._add_selected_to_queue)
-        menu.add_command(label="Check for Updates", command=self._check_selected_updates)
         menu.add_separator()
         menu.add_command(label="Open Folder", command=lambda: os.startfile(self.installer_folder) if os.name == 'nt' else None)
         menu.post(event.x_root, event.y_root)

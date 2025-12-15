@@ -73,11 +73,28 @@ class Database:
                 registry_key TEXT,
                 matched_installer_id INTEGER,
                 has_installer BOOLEAN DEFAULT 0,
+                is_hidden BOOLEAN DEFAULT 0,
+                manually_linked BOOLEAN DEFAULT 0,
+                parent_program_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (matched_installer_id) REFERENCES installers(id)
+                FOREIGN KEY (matched_installer_id) REFERENCES installers(id),
+                FOREIGN KEY (parent_program_id) REFERENCES installed_programs(id)
             )
         """)
+        
+        try:
+            cursor.execute("ALTER TABLE installed_programs ADD COLUMN is_hidden BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE installed_programs ADD COLUMN manually_linked BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE installed_programs ADD COLUMN parent_program_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
         
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS installation_queue (
@@ -192,19 +209,84 @@ class Database:
         self.conn.commit()
         return cursor.lastrowid
     
-    def get_all_installed_programs(self) -> List[Dict]:
+    def get_all_installed_programs(self, include_hidden: bool = False) -> List[Dict]:
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM installed_programs ORDER BY display_name")
+        if include_hidden:
+            cursor.execute("SELECT * FROM installed_programs WHERE parent_program_id IS NULL ORDER BY display_name")
+        else:
+            cursor.execute("SELECT * FROM installed_programs WHERE (is_hidden = 0 OR is_hidden IS NULL) AND parent_program_id IS NULL ORDER BY display_name")
         return [dict(row) for row in cursor.fetchall()]
+    
+    def get_installed_program(self, program_id: int) -> Optional[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM installed_programs WHERE id = ?", (program_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
     
     def get_programs_without_installers(self) -> List[Dict]:
         cursor = self.conn.cursor()
         cursor.execute("""
             SELECT * FROM installed_programs 
-            WHERE has_installer = 0 OR matched_installer_id IS NULL
+            WHERE (has_installer = 0 OR matched_installer_id IS NULL) 
+            AND (is_hidden = 0 OR is_hidden IS NULL)
+            AND parent_program_id IS NULL
             ORDER BY display_name
         """)
         return [dict(row) for row in cursor.fetchall()]
+    
+    def get_programs_with_installers(self) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM installed_programs 
+            WHERE has_installer = 1 AND matched_installer_id IS NOT NULL
+            AND (is_hidden = 0 OR is_hidden IS NULL)
+            AND parent_program_id IS NULL
+            ORDER BY display_name
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_hidden_programs(self) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM installed_programs WHERE is_hidden = 1 ORDER BY display_name")
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def get_manually_linked_programs(self) -> List[Dict]:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM installed_programs WHERE manually_linked = 1 ORDER BY display_name")
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def hide_program(self, program_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET is_hidden = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (program_id,))
+        self.conn.commit()
+    
+    def unhide_program(self, program_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET is_hidden = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (program_id,))
+        self.conn.commit()
+    
+    def link_program_to_installer(self, program_id: int, installer_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE installed_programs 
+            SET matched_installer_id = ?, has_installer = 1, manually_linked = 1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (installer_id, program_id))
+        self.conn.commit()
+    
+    def unlink_program_from_installer(self, program_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE installed_programs 
+            SET matched_installer_id = NULL, has_installer = 0, manually_linked = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (program_id,))
+        self.conn.commit()
+    
+    def set_program_parent(self, child_id: int, parent_id: int):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET parent_program_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (parent_id, child_id))
+        self.conn.commit()
     
     def match_program_to_installer(self, program_id: int, installer_id: int):
         cursor = self.conn.cursor()
