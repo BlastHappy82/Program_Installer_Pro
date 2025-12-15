@@ -613,16 +613,28 @@ class InstallerManagerGUI:
             menu.post(event.x_root, event.y_root)
     
     def _hide_program(self, program_id: int):
-        """Hide a program from the list."""
-        self.db.hide_program(program_id)
+        """Hide all selected programs."""
+        selected = self.installed_tree.selection()
+        count = 0
+        for item in selected:
+            tags = self.installed_tree.item(item, 'tags')
+            if tags:
+                self.db.hide_program(int(tags[0]))
+                count += 1
         self._refresh_installed_list()
-        self.status_var.set("Program hidden")
+        self.status_var.set(f"{count} program(s) hidden")
     
     def _unhide_program(self, program_id: int):
-        """Unhide a program."""
-        self.db.unhide_program(program_id)
+        """Unhide all selected programs."""
+        selected = self.installed_tree.selection()
+        count = 0
+        for item in selected:
+            tags = self.installed_tree.item(item, 'tags')
+            if tags:
+                self.db.unhide_program(int(tags[0]))
+                count += 1
         self._refresh_installed_list()
-        self.status_var.set("Program unhidden")
+        self.status_var.set(f"{count} program(s) unhidden")
     
     def _link_to_installer(self, program_id: int):
         """Link a program to an installer file."""
