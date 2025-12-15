@@ -6,7 +6,7 @@ import hashlib
 import threading
 import requests
 from pathlib import Path
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable, Dict, Union
 from urllib.parse import urlparse, unquote
 import logging
 
@@ -172,10 +172,11 @@ class DownloadManager:
         except Exception:
             return None
     
-    def set_download_folder(self, folder: str):
+    def set_download_folder(self, folder: Optional[str]):
         """Change download folder."""
-        self.download_folder = Path(folder)
-        self.download_folder.mkdir(parents=True, exist_ok=True)
+        if folder:
+            self.download_folder = Path(folder)
+            self.download_folder.mkdir(parents=True, exist_ok=True)
 
 
 class BatchDownloader:

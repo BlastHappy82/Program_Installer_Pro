@@ -162,7 +162,7 @@ class Database:
         return [dict(row) for row in cursor.fetchall()]
     
     def update_installer_update_status(self, installer_id: int, update_status: str,
-                                        latest_version: str = None, download_url: str = None):
+                                        latest_version: Optional[str] = None, download_url: Optional[str] = None):
         cursor = self.conn.cursor()
         cursor.execute("""
             UPDATE installers 
@@ -180,9 +180,9 @@ class Database:
         """, (url, installer_id))
         self.conn.commit()
     
-    def add_installed_program(self, name: str, display_name: str = None, version: str = None,
-                               publisher: str = None, install_location: str = None,
-                               uninstall_string: str = None, registry_key: str = None) -> int:
+    def add_installed_program(self, name: str, display_name: Optional[str] = None, version: Optional[str] = None,
+                               publisher: Optional[str] = None, install_location: Optional[str] = None,
+                               uninstall_string: Optional[str] = None, registry_key: Optional[str] = None) -> int:
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO installed_programs 

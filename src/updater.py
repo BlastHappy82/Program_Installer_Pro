@@ -5,7 +5,7 @@ Uses Winget manifests and known software update sources.
 import re
 import json
 import requests
-from typing import Dict, Optional, List, Tuple
+from typing import Dict, Optional, List
 from packaging import version as pkg_version
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -89,7 +89,7 @@ class UpdateChecker:
             'User-Agent': 'InstallerManager/1.0'
         })
     
-    def check_update(self, detected_name: str, current_version: str = None) -> Dict:
+    def check_update(self, detected_name: Optional[str], current_version: Optional[str] = None) -> Dict:
         """
         Check if an update is available for the given software.
         Returns dict with: status, latest_version, download_url
