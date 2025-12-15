@@ -107,8 +107,7 @@ class InstallerManagerGUI:
         title_label = ttk.Label(
             header_frame, 
             text="Installer Manager",
-            font=("-size", 18, "-weight", "bold"),
-            bootstyle="inverse-primary"
+            font=("-size", 18, "-weight", "bold")
         )
         title_label.pack(side=LEFT, padx=(0, 20))
         
