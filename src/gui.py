@@ -21,6 +21,26 @@ from .installer import InstallationExecutor, InstallationQueue
 from .launcher import StartupManager
 
 
+def set_dark_title_bar(window):
+    """Enable dark mode title bar on Windows 10/11."""
+    if sys.platform != 'win32':
+        return
+    try:
+        import ctypes
+        window.update()
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if not hwnd:
+            hwnd = window.winfo_id()
+        if hwnd:
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                ctypes.byref(ctypes.c_int(1)), ctypes.sizeof(ctypes.c_int)
+            )
+    except Exception:
+        pass
+
+
 class InstallerManagerGUI:
     """Main GUI application with modern ttkbootstrap styling."""
     
@@ -31,6 +51,9 @@ class InstallerManagerGUI:
             size=(1100, 750),
             minsize=(900, 650)
         )
+        
+        self._remove_icon()
+        set_dark_title_bar(self.root)
         
         self.db = Database()
         self.update_checker = UpdateChecker()
@@ -95,6 +118,20 @@ class InstallerManagerGUI:
         """Change the application theme."""
         self.root.style.theme_use(theme_name)
         self.db.set_setting('theme', theme_name)
+    
+    def _remove_icon(self):
+        """Remove the default window icon."""
+        try:
+            if sys.platform == 'win32':
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('')
+            self.root.iconbitmap('')
+        except Exception:
+            try:
+                empty_icon = tk.PhotoImage(width=1, height=1)
+                self.root.iconphoto(True, empty_icon)
+            except Exception:
+                pass
     
     def _create_main_layout(self):
         """Create the main application layout."""
