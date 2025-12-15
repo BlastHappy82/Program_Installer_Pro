@@ -25,7 +25,11 @@ class StartupManager:
     
     def _get_launcher_path(self) -> str:
         """Get path to the launcher script."""
-        return str(Path(__file__).parent / "launcher_check.py")
+        launcher_path = Path(__file__).parent / "launcher_check.py"
+        if launcher_path.exists():
+            return str(launcher_path)
+        main_path = Path(__file__).parent.parent / "main.py"
+        return str(main_path)
     
     def register_startup(self) -> bool:
         """Register the launcher to run at Windows startup."""
@@ -44,7 +48,10 @@ class StartupManager:
             )
             
             python_exe = sys.executable
-            command = f'"{python_exe}" "{self.launcher_path}"'
+            if self.launcher_path.endswith('main.py'):
+                command = f'"{python_exe}" "{self.launcher_path}" --check'
+            else:
+                command = f'"{python_exe}" "{self.launcher_path}"'
             
             winreg.SetValueEx(key, self.APP_NAME, 0, winreg.REG_SZ, command)
             winreg.CloseKey(key)
