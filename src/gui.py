@@ -1,12 +1,15 @@
 """
 Main GUI module for the Installer Manager application.
-Uses tkinter for cross-platform compatibility.
+Uses ttkbootstrap for a modern, professional look.
 """
 import os
 import sys
 import threading
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from ttkbootstrap.dialogs import Messagebox
+from tkinter import filedialog
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from typing import Optional, List, Dict, Callable
 
@@ -19,13 +22,15 @@ from .launcher import StartupManager
 
 
 class InstallerManagerGUI:
-    """Main GUI application."""
+    """Main GUI application with modern ttkbootstrap styling."""
     
     def __init__(self, resume_mode: bool = False):
-        self.root = tk.Tk()
-        self.root.title("Installer Manager")
-        self.root.geometry("1000x700")
-        self.root.minsize(800, 600)
+        self.root = ttk.Window(
+            title="Installer Manager",
+            themename="darkly",
+            size=(1100, 750),
+            minsize=(900, 650)
+        )
         
         self.db = Database()
         self.update_checker = UpdateChecker()
@@ -36,7 +41,6 @@ class InstallerManagerGUI:
         self.installer_folder = self.db.get_setting('installer_folder', str(Path.home() / "Downloads"))
         self.include_subfolders = self.db.get_setting('include_subfolders', 'false') == 'true'
         
-        self._setup_styles()
         self._create_menu()
         self._create_main_layout()
         
@@ -44,23 +48,6 @@ class InstallerManagerGUI:
             self._check_pending_installations()
         
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-    
-    def _setup_styles(self):
-        """Configure ttk styles."""
-        style = ttk.Style()
-        style.theme_use('clam')
-        
-        style.configure('Title.TLabel', font=('Segoe UI', 14, 'bold'))
-        style.configure('Header.TLabel', font=('Segoe UI', 11, 'bold'))
-        style.configure('Status.TLabel', font=('Segoe UI', 9))
-        
-        style.configure('Success.TLabel', foreground='#28a745')
-        style.configure('Warning.TLabel', foreground='#ffc107')
-        style.configure('Error.TLabel', foreground='#dc3545')
-        style.configure('Info.TLabel', foreground='#17a2b8')
-        
-        style.configure('Action.TButton', font=('Segoe UI', 10))
-        style.configure('Primary.TButton', font=('Segoe UI', 10, 'bold'))
     
     def _create_menu(self):
         """Create application menu."""
@@ -93,33 +80,62 @@ class InstallerManagerGUI:
             command=self._toggle_startup
         )
         
+        view_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="Dark Theme", command=lambda: self._change_theme("darkly"))
+        view_menu.add_command(label="Light Theme", command=lambda: self._change_theme("flatly"))
+        view_menu.add_command(label="Superhero Theme", command=lambda: self._change_theme("superhero"))
+        view_menu.add_command(label="Cyborg Theme", command=lambda: self._change_theme("cyborg"))
+        
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
         help_menu.add_command(label="About", command=self._show_about)
     
+    def _change_theme(self, theme_name: str):
+        """Change the application theme."""
+        self.root.style.theme_use(theme_name)
+        self.db.set_setting('theme', theme_name)
+    
     def _create_main_layout(self):
         """Create the main application layout."""
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame = ttk.Frame(self.root, padding=15)
+        main_frame.pack(fill=BOTH, expand=YES)
         
         header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 10))
+        header_frame.pack(fill=X, pady=(0, 15))
         
-        ttk.Label(header_frame, text="Installer Manager", style='Title.TLabel').pack(side=tk.LEFT)
+        title_label = ttk.Label(
+            header_frame, 
+            text="Installer Manager",
+            font=("-size", 18, "-weight", "bold"),
+            bootstyle="inverse-primary"
+        )
+        title_label.pack(side=LEFT, padx=(0, 20))
         
         folder_frame = ttk.Frame(header_frame)
-        folder_frame.pack(side=tk.RIGHT)
+        folder_frame.pack(side=RIGHT)
         
-        ttk.Label(folder_frame, text="Folder:").pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(folder_frame, text="Folder:", font=("-size", 10)).pack(side=LEFT, padx=(0, 8))
         
         self.folder_var = tk.StringVar(value=self.installer_folder)
-        folder_entry = ttk.Entry(folder_frame, textvariable=self.folder_var, width=40, state='readonly')
-        folder_entry.pack(side=tk.LEFT, padx=(0, 5))
+        folder_entry = ttk.Entry(
+            folder_frame, 
+            textvariable=self.folder_var, 
+            width=45, 
+            state='readonly',
+            bootstyle="secondary"
+        )
+        folder_entry.pack(side=LEFT, padx=(0, 8))
         
-        ttk.Button(folder_frame, text="Browse", command=self._select_folder).pack(side=tk.LEFT)
+        ttk.Button(
+            folder_frame, 
+            text="Browse",
+            command=self._select_folder,
+            bootstyle="outline"
+        ).pack(side=LEFT)
         
-        self.notebook = ttk.Notebook(main_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        self.notebook = ttk.Notebook(main_frame, bootstyle="primary")
+        self.notebook.pack(fill=BOTH, expand=YES, pady=(10, 10))
         
         self._create_installers_tab()
         self._create_updates_tab()
@@ -127,164 +143,313 @@ class InstallerManagerGUI:
         self._create_queue_tab()
         
         status_frame = ttk.Frame(main_frame)
-        status_frame.pack(fill=tk.X, pady=(10, 0))
+        status_frame.pack(fill=X, pady=(10, 0))
         
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(status_frame, textvariable=self.status_var, style='Status.TLabel').pack(side=tk.LEFT)
+        ttk.Label(
+            status_frame, 
+            textvariable=self.status_var,
+            font=("-size", 9),
+            bootstyle="secondary"
+        ).pack(side=LEFT)
         
-        self.progress = ttk.Progressbar(status_frame, mode='determinate', length=200)
-        self.progress.pack(side=tk.RIGHT)
+        self.progress = ttk.Progressbar(
+            status_frame, 
+            mode='determinate', 
+            length=250,
+            bootstyle="success-striped"
+        )
+        self.progress.pack(side=RIGHT)
     
     def _create_installers_tab(self):
         """Create the Installers tab."""
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="📦 Installers")
+        tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(tab, text="  Installers  ")
         
         toolbar = ttk.Frame(tab)
-        toolbar.pack(fill=tk.X, pady=(0, 10))
+        toolbar.pack(fill=X, pady=(0, 15))
         
-        ttk.Button(toolbar, text="🔄 Scan Folder", command=self._scan_installers, style='Primary.TButton').pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="➕ Add to Queue", command=self._add_selected_to_queue).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="🔍 Check Updates", command=self._check_selected_updates).pack(side=tk.LEFT)
+        ttk.Button(
+            toolbar, 
+            text="Scan Folder",
+            command=self._scan_installers,
+            bootstyle="success",
+            width=14
+        ).pack(side=LEFT, padx=(0, 8))
+        
+        ttk.Button(
+            toolbar, 
+            text="Add to Queue",
+            command=self._add_selected_to_queue,
+            bootstyle="info",
+            width=14
+        ).pack(side=LEFT, padx=(0, 8))
+        
+        ttk.Button(
+            toolbar, 
+            text="Check Updates",
+            command=self._check_selected_updates,
+            bootstyle="warning",
+            width=14
+        ).pack(side=LEFT)
+        
+        tree_frame = ttk.Frame(tab)
+        tree_frame.pack(fill=BOTH, expand=YES)
         
         columns = ('name', 'version', 'type', 'size', 'update_status')
-        self.installers_tree = ttk.Treeview(tab, columns=columns, show='headings', selectmode='extended')
+        self.installers_tree = ttk.Treeview(
+            tree_frame, 
+            columns=columns, 
+            show='headings', 
+            selectmode='extended',
+            bootstyle="primary"
+        )
         
-        self.installers_tree.heading('name', text='Program Name')
-        self.installers_tree.heading('version', text='Version')
-        self.installers_tree.heading('type', text='Type')
-        self.installers_tree.heading('size', text='Size')
-        self.installers_tree.heading('update_status', text='Update Status')
+        self.installers_tree.heading('name', text='Program Name', anchor=W)
+        self.installers_tree.heading('version', text='Version', anchor=W)
+        self.installers_tree.heading('type', text='Type', anchor=CENTER)
+        self.installers_tree.heading('size', text='Size', anchor=E)
+        self.installers_tree.heading('update_status', text='Update Status', anchor=W)
         
-        self.installers_tree.column('name', width=250)
-        self.installers_tree.column('version', width=100)
-        self.installers_tree.column('type', width=60)
-        self.installers_tree.column('size', width=80)
-        self.installers_tree.column('update_status', width=150)
+        self.installers_tree.column('name', width=280, minwidth=200)
+        self.installers_tree.column('version', width=100, minwidth=80)
+        self.installers_tree.column('type', width=70, minwidth=50, anchor=CENTER)
+        self.installers_tree.column('size', width=90, minwidth=70, anchor=E)
+        self.installers_tree.column('update_status', width=160, minwidth=120)
         
-        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.installers_tree.yview)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.installers_tree.yview, bootstyle="primary-round")
         self.installers_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.installers_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.installers_tree.pack(side=LEFT, fill=BOTH, expand=YES)
+        scrollbar.pack(side=RIGHT, fill=Y)
         
         self.installers_tree.bind('<Double-1>', self._on_installer_double_click)
         self.installers_tree.bind('<Button-3>', self._show_installer_context_menu)
     
     def _create_updates_tab(self):
         """Create the Update Installers tab."""
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="⬆️ Update Installers")
+        tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(tab, text="  Update Installers  ")
         
         toolbar = ttk.Frame(tab)
-        toolbar.pack(fill=tk.X, pady=(0, 10))
+        toolbar.pack(fill=X, pady=(0, 15))
         
-        ttk.Button(toolbar, text="🔍 Check All Updates", command=self._check_all_updates, style='Primary.TButton').pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="⬇️ Download Selected", command=self._download_selected_updates).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="⬇️ Download All Updates", command=self._download_all_updates).pack(side=tk.LEFT)
+        ttk.Button(
+            toolbar, 
+            text="Check All Updates",
+            command=self._check_all_updates,
+            bootstyle="warning",
+            width=16
+        ).pack(side=LEFT, padx=(0, 8))
+        
+        ttk.Button(
+            toolbar, 
+            text="Download Selected",
+            command=self._download_selected_updates,
+            bootstyle="success",
+            width=16
+        ).pack(side=LEFT, padx=(0, 8))
+        
+        ttk.Button(
+            toolbar, 
+            text="Download All Updates",
+            command=self._download_all_updates,
+            bootstyle="success-outline",
+            width=18
+        ).pack(side=LEFT)
+        
+        tree_frame = ttk.Frame(tab)
+        tree_frame.pack(fill=BOTH, expand=YES)
         
         columns = ('name', 'current', 'latest', 'status', 'action')
-        self.updates_tree = ttk.Treeview(tab, columns=columns, show='headings', selectmode='extended')
+        self.updates_tree = ttk.Treeview(
+            tree_frame, 
+            columns=columns, 
+            show='headings', 
+            selectmode='extended',
+            bootstyle="info"
+        )
         
-        self.updates_tree.heading('name', text='Program Name')
-        self.updates_tree.heading('current', text='Current Version')
-        self.updates_tree.heading('latest', text='Latest Version')
-        self.updates_tree.heading('status', text='Status')
-        self.updates_tree.heading('action', text='Action')
+        self.updates_tree.heading('name', text='Program Name', anchor=W)
+        self.updates_tree.heading('current', text='Current Version', anchor=W)
+        self.updates_tree.heading('latest', text='Latest Version', anchor=W)
+        self.updates_tree.heading('status', text='Status', anchor=W)
+        self.updates_tree.heading('action', text='Action', anchor=CENTER)
         
-        self.updates_tree.column('name', width=250)
-        self.updates_tree.column('current', width=120)
-        self.updates_tree.column('latest', width=120)
-        self.updates_tree.column('status', width=150)
-        self.updates_tree.column('action', width=100)
+        self.updates_tree.column('name', width=280, minwidth=200)
+        self.updates_tree.column('current', width=130, minwidth=100)
+        self.updates_tree.column('latest', width=130, minwidth=100)
+        self.updates_tree.column('status', width=150, minwidth=120)
+        self.updates_tree.column('action', width=100, minwidth=80, anchor=CENTER)
         
-        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.updates_tree.yview)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.updates_tree.yview, bootstyle="info-round")
         self.updates_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.updates_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.updates_tree.pack(side=LEFT, fill=BOTH, expand=YES)
+        scrollbar.pack(side=RIGHT, fill=Y)
         
         self.updates_tree.bind('<Double-1>', self._on_update_double_click)
     
     def _create_installed_tab(self):
         """Create the Installed Programs tab."""
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="💻 Installed Programs")
+        tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(tab, text="  Installed Programs  ")
         
         toolbar = ttk.Frame(tab)
-        toolbar.pack(fill=tk.X, pady=(0, 10))
+        toolbar.pack(fill=X, pady=(0, 15))
         
-        ttk.Button(toolbar, text="🔍 Scan Installed Programs", command=self._scan_installed, style='Primary.TButton').pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="📥 Download Missing Installers", command=self._download_missing_installers).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(
+            toolbar, 
+            text="Scan Programs",
+            command=self._scan_installed,
+            bootstyle="info",
+            width=14
+        ).pack(side=LEFT, padx=(0, 8))
+        
+        ttk.Button(
+            toolbar, 
+            text="Download Missing",
+            command=self._download_missing_installers,
+            bootstyle="success",
+            width=16
+        ).pack(side=LEFT, padx=(0, 20))
         
         self.show_orphans_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(toolbar, text="Show only programs without installers", variable=self.show_orphans_var, command=self._refresh_installed_list).pack(side=tk.LEFT)
+        ttk.Checkbutton(
+            toolbar, 
+            text="Show only programs without installers",
+            variable=self.show_orphans_var,
+            command=self._refresh_installed_list,
+            bootstyle="warning-round-toggle"
+        ).pack(side=LEFT)
+        
+        tree_frame = ttk.Frame(tab)
+        tree_frame.pack(fill=BOTH, expand=YES)
         
         columns = ('name', 'version', 'publisher', 'has_installer', 'action')
-        self.installed_tree = ttk.Treeview(tab, columns=columns, show='headings', selectmode='extended')
+        self.installed_tree = ttk.Treeview(
+            tree_frame, 
+            columns=columns, 
+            show='headings', 
+            selectmode='extended',
+            bootstyle="secondary"
+        )
         
-        self.installed_tree.heading('name', text='Program Name')
-        self.installed_tree.heading('version', text='Version')
-        self.installed_tree.heading('publisher', text='Publisher')
-        self.installed_tree.heading('has_installer', text='Has Installer')
-        self.installed_tree.heading('action', text='Action')
+        self.installed_tree.heading('name', text='Program Name', anchor=W)
+        self.installed_tree.heading('version', text='Version', anchor=W)
+        self.installed_tree.heading('publisher', text='Publisher', anchor=W)
+        self.installed_tree.heading('has_installer', text='Has Installer', anchor=CENTER)
+        self.installed_tree.heading('action', text='Action', anchor=CENTER)
         
-        self.installed_tree.column('name', width=300)
-        self.installed_tree.column('version', width=120)
-        self.installed_tree.column('publisher', width=150)
-        self.installed_tree.column('has_installer', width=100)
-        self.installed_tree.column('action', width=100)
+        self.installed_tree.column('name', width=320, minwidth=250)
+        self.installed_tree.column('version', width=120, minwidth=80)
+        self.installed_tree.column('publisher', width=180, minwidth=120)
+        self.installed_tree.column('has_installer', width=100, minwidth=80, anchor=CENTER)
+        self.installed_tree.column('action', width=100, minwidth=80, anchor=CENTER)
         
-        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.installed_tree.yview)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.installed_tree.yview, bootstyle="secondary-round")
         self.installed_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.installed_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.installed_tree.pack(side=LEFT, fill=BOTH, expand=YES)
+        scrollbar.pack(side=RIGHT, fill=Y)
     
     def _create_queue_tab(self):
         """Create the Installation Queue tab."""
-        tab = ttk.Frame(self.notebook, padding="10")
-        self.notebook.add(tab, text="📋 Installation Queue")
+        tab = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(tab, text="  Installation Queue  ")
         
         toolbar = ttk.Frame(tab)
-        toolbar.pack(fill=tk.X, pady=(0, 10))
+        toolbar.pack(fill=X, pady=(0, 15))
         
-        ttk.Button(toolbar, text="▶️ Start Installation", command=self._start_installation, style='Primary.TButton').pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="⏸️ Pause", command=self._pause_installation).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="🗑️ Clear Queue", command=self._clear_queue).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(
+            toolbar, 
+            text="Start Installation",
+            command=self._start_installation,
+            bootstyle="success",
+            width=16
+        ).pack(side=LEFT, padx=(0, 8))
         
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        ttk.Button(
+            toolbar, 
+            text="Pause",
+            command=self._pause_installation,
+            bootstyle="warning",
+            width=10
+        ).pack(side=LEFT, padx=(0, 8))
         
-        ttk.Button(toolbar, text="⬆️ Move Up", command=self._move_queue_up).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="⬇️ Move Down", command=self._move_queue_down).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(toolbar, text="❌ Remove", command=self._remove_from_queue).pack(side=tk.LEFT)
+        ttk.Button(
+            toolbar, 
+            text="Clear Queue",
+            command=self._clear_queue,
+            bootstyle="danger-outline",
+            width=12
+        ).pack(side=LEFT, padx=(0, 20))
+        
+        ttk.Separator(toolbar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
+        
+        ttk.Button(
+            toolbar, 
+            text="Move Up",
+            command=self._move_queue_up,
+            bootstyle="secondary-outline",
+            width=10
+        ).pack(side=LEFT, padx=(0, 5))
+        
+        ttk.Button(
+            toolbar, 
+            text="Move Down",
+            command=self._move_queue_down,
+            bootstyle="secondary-outline",
+            width=10
+        ).pack(side=LEFT, padx=(0, 5))
+        
+        ttk.Button(
+            toolbar, 
+            text="Remove",
+            command=self._remove_from_queue,
+            bootstyle="danger-outline",
+            width=10
+        ).pack(side=LEFT)
+        
+        tree_frame = ttk.Frame(tab)
+        tree_frame.pack(fill=BOTH, expand=YES)
         
         columns = ('position', 'name', 'version', 'status', 'exit_code')
-        self.queue_tree = ttk.Treeview(tab, columns=columns, show='headings', selectmode='browse')
+        self.queue_tree = ttk.Treeview(
+            tree_frame, 
+            columns=columns, 
+            show='headings', 
+            selectmode='browse',
+            bootstyle="warning"
+        )
         
-        self.queue_tree.heading('position', text='#')
-        self.queue_tree.heading('name', text='Program Name')
-        self.queue_tree.heading('version', text='Version')
-        self.queue_tree.heading('status', text='Status')
-        self.queue_tree.heading('exit_code', text='Exit Code')
+        self.queue_tree.heading('position', text='#', anchor=CENTER)
+        self.queue_tree.heading('name', text='Program Name', anchor=W)
+        self.queue_tree.heading('version', text='Version', anchor=W)
+        self.queue_tree.heading('status', text='Status', anchor=W)
+        self.queue_tree.heading('exit_code', text='Exit Code', anchor=CENTER)
         
-        self.queue_tree.column('position', width=40)
-        self.queue_tree.column('name', width=300)
-        self.queue_tree.column('version', width=100)
-        self.queue_tree.column('status', width=150)
-        self.queue_tree.column('exit_code', width=100)
+        self.queue_tree.column('position', width=50, minwidth=40, anchor=CENTER)
+        self.queue_tree.column('name', width=320, minwidth=250)
+        self.queue_tree.column('version', width=120, minwidth=80)
+        self.queue_tree.column('status', width=150, minwidth=120)
+        self.queue_tree.column('exit_code', width=100, minwidth=80, anchor=CENTER)
         
-        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.queue_tree.yview)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.queue_tree.yview, bootstyle="warning-round")
         self.queue_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.queue_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.queue_tree.pack(side=LEFT, fill=BOTH, expand=YES)
+        scrollbar.pack(side=RIGHT, fill=Y)
         
-        info_frame = ttk.LabelFrame(tab, text="Queue Summary", padding="10")
-        info_frame.pack(fill=tk.X, pady=(10, 0))
+        info_frame = ttk.Labelframe(tab, text="Queue Summary", padding=15, bootstyle="info")
+        info_frame.pack(fill=X, pady=(15, 0))
         
         self.queue_summary_var = tk.StringVar(value="No items in queue")
-        ttk.Label(info_frame, textvariable=self.queue_summary_var).pack(side=tk.LEFT)
+        ttk.Label(
+            info_frame, 
+            textvariable=self.queue_summary_var,
+            font=("-size", 10)
+        ).pack(side=LEFT)
     
     def _select_folder(self):
         """Open folder selection dialog."""
@@ -309,14 +474,14 @@ class InstallerManagerGUI:
             success = self.startup_manager.register_startup()
             if not success:
                 self.startup_var.set(False)
-                messagebox.showerror("Error", "Failed to register startup entry")
+                Messagebox.show_error("Failed to register startup entry", title="Error")
         else:
             self.startup_manager.unregister_startup()
     
     def _scan_installers(self):
         """Scan the installer folder."""
         self.status_var.set("Scanning installer folder...")
-        self.progress['mode'] = 'indeterminate'
+        self.progress.configure(mode='indeterminate')
         self.progress.start()
         
         def scan():
@@ -346,13 +511,13 @@ class InstallerManagerGUI:
     def _finish_scan(self, count: int):
         """Finish scan and update UI."""
         self.progress.stop()
-        self.progress['mode'] = 'determinate'
+        self.progress.configure(mode='determinate')
         self.status_var.set(f"Found {count} installer(s)")
     
     def _check_all_updates(self):
         """Check updates for all installers."""
         self.status_var.set("Checking for updates...")
-        self.progress['mode'] = 'determinate'
+        self.progress.configure(mode='determinate')
         self.progress['value'] = 0
         
         def check():
@@ -401,7 +566,7 @@ class InstallerManagerGUI:
         """Check updates for selected installers."""
         selected = self.installers_tree.selection()
         if not selected:
-            messagebox.showinfo("Info", "Please select installers to check for updates")
+            Messagebox.show_info("Please select installers to check for updates", title="Info")
             return
         
         self.notebook.select(1)
@@ -411,7 +576,7 @@ class InstallerManagerGUI:
         """Download updates for selected items."""
         selected = self.updates_tree.selection()
         if not selected:
-            messagebox.showinfo("Info", "Please select items to download")
+            Messagebox.show_info("Please select items to download", title="Info")
             return
         
         for item in selected:
@@ -428,10 +593,10 @@ class InstallerManagerGUI:
         updates = [i for i in installers if i.get('update_status') == 'update_available' and i.get('download_url')]
         
         if not updates:
-            messagebox.showinfo("Info", "No updates available to download")
+            Messagebox.show_info("No updates available to download", title="Info")
             return
         
-        if messagebox.askyesno("Confirm", f"Download {len(updates)} update(s)?"):
+        if Messagebox.yesno(f"Download {len(updates)} update(s)?", title="Confirm") == "Yes":
             for installer in updates:
                 self._start_download(installer)
     
@@ -453,7 +618,7 @@ class InstallerManagerGUI:
                 self.root.after(0, lambda: self.status_var.set(f"Downloaded: {filename}"))
                 self._scan_installers()
             else:
-                self.root.after(0, lambda: messagebox.showerror("Download Failed", error or "Unknown error"))
+                self.root.after(0, lambda: Messagebox.show_error(error or "Unknown error", title="Download Failed"))
         
         self.status_var.set(f"Downloading {filename}...")
         self.download_manager.download_async(url, filename, on_progress, on_complete)
@@ -461,7 +626,7 @@ class InstallerManagerGUI:
     def _scan_installed(self):
         """Scan for installed programs."""
         self.status_var.set("Scanning installed programs...")
-        self.progress['mode'] = 'indeterminate'
+        self.progress.configure(mode='indeterminate')
         self.progress.start()
         
         def scan():
@@ -510,7 +675,7 @@ class InstallerManagerGUI:
     def _finish_installed_scan(self, total: int, matched: int):
         """Finish installed programs scan."""
         self.progress.stop()
-        self.progress['mode'] = 'determinate'
+        self.progress.configure(mode='determinate')
         orphaned = total - matched
         self.status_var.set(f"Found {total} installed programs ({matched} have installers, {orphaned} missing)")
     
@@ -540,7 +705,7 @@ class InstallerManagerGUI:
         """Download installers for programs that don't have one."""
         orphans = self.db.get_programs_without_installers()
         if not orphans:
-            messagebox.showinfo("Info", "All installed programs have corresponding installers")
+            Messagebox.show_info("All installed programs have corresponding installers", title="Info")
             return
         
         found = 0
@@ -554,7 +719,7 @@ class InstallerManagerGUI:
                 found += 1
         
         if found > 0:
-            if messagebox.askyesno("Download", f"Found download URLs for {found} program(s). Download them?"):
+            if Messagebox.yesno(f"Found download URLs for {found} program(s). Download them?", title="Download") == "Yes":
                 for program in orphans:
                     name = program.get('display_name') or program.get('name')
                     update_info = self.update_checker.check_update(name, None)
@@ -567,13 +732,13 @@ class InstallerManagerGUI:
                         }
                         self._start_download(installer_info)
         else:
-            messagebox.showinfo("Info", "Could not find download URLs for any of the missing installers")
+            Messagebox.show_info("Could not find download URLs for any of the missing installers", title="Info")
     
     def _add_selected_to_queue(self):
         """Add selected installers to the installation queue."""
         selected = self.installers_tree.selection()
         if not selected:
-            messagebox.showinfo("Info", "Please select installers to add to queue")
+            Messagebox.show_info("Please select installers to add to queue", title="Info")
             return
         
         for item in selected:
@@ -621,13 +786,15 @@ class InstallerManagerGUI:
         """Start the installation queue."""
         queue = self.db.get_pending_queue_items()
         if not queue:
-            messagebox.showinfo("Info", "No pending installations in queue")
+            Messagebox.show_info("No pending installations in queue", title="Info")
             return
         
         if not self.executor.check_elevation():
-            if messagebox.askyesno("Admin Required", 
+            if Messagebox.yesno(
                 "Installing programs requires administrator privileges.\n\n"
-                "Would you like to restart with elevated permissions?"):
+                "Would you like to restart with elevated permissions?",
+                title="Admin Required"
+            ) == "Yes":
                 self.executor.request_elevation()
             return
         
@@ -662,7 +829,7 @@ class InstallerManagerGUI:
             
             self.db.clear_session_state()
             self.root.after(0, lambda: self.status_var.set("All installations complete"))
-            self.root.after(0, lambda: messagebox.showinfo("Complete", "All installations have been processed"))
+            self.root.after(0, lambda: Messagebox.show_info("All installations have been processed", title="Complete"))
         
         threading.Thread(target=install_loop, daemon=True).start()
     
@@ -675,18 +842,7 @@ class InstallerManagerGUI:
         message += f"You have {len(pending)} more installation(s) pending.\n\n"
         message += "What would you like to do?"
         
-        result = messagebox.askquestion(
-            "Restart Required",
-            message,
-            type='yesnocancel',
-            icon='info'
-        )
-        
-        if result == 'yes':
-            pass
-        elif result == 'no':
-            pass
-        
+        result = Messagebox.yesno(message, title="Restart Required")
         self._refresh_queue()
     
     def _pause_installation(self):
@@ -695,7 +851,7 @@ class InstallerManagerGUI:
     
     def _clear_queue(self):
         """Clear the installation queue."""
-        if messagebox.askyesno("Confirm", "Clear all items from the installation queue?"):
+        if Messagebox.yesno("Clear all items from the installation queue?", title="Confirm") == "Yes":
             self.db.clear_queue()
             self._refresh_queue()
             self.status_var.set("Queue cleared")
@@ -746,9 +902,11 @@ class InstallerManagerGUI:
             self._refresh_queue()
             self.notebook.select(3)
             
-            if messagebox.askyesno("Resume Installation", 
+            if Messagebox.yesno(
                 f"You have {len(pending)} pending installation(s).\n\n"
-                "Would you like to continue the installation process?"):
+                "Would you like to continue the installation process?",
+                title="Resume Installation"
+            ) == "Yes":
                 self._start_installation()
     
     def _export_csv(self):
@@ -808,26 +966,28 @@ class InstallerManagerGUI:
     
     def _show_about(self):
         """Show about dialog."""
-        messagebox.showinfo(
-            "About Installer Manager",
+        Messagebox.show_info(
             "Installer Manager v1.0\n\n"
-            "A Python application for managing software installers.\n\n"
+            "A modern Python application for managing software installers.\n\n"
             "Features:\n"
             "• Scan and track installer files\n"
             "• Check for and download updates\n"
             "• Detect installed programs\n"
             "• Queue and run installations\n"
             "• Resume after restart\n\n"
-            "Converted from PowerShell to Python"
+            "Themes available in View menu",
+            title="About Installer Manager"
         )
     
     def _on_close(self):
         """Handle application close."""
         pending = self.db.get_pending_queue_items()
         if pending:
-            if not messagebox.askyesno("Confirm Exit", 
+            if Messagebox.yesno(
                 f"You have {len(pending)} pending installation(s).\n"
-                "Are you sure you want to exit?"):
+                "Are you sure you want to exit?",
+                title="Confirm Exit"
+            ) != "Yes":
                 return
         
         self.db.close()

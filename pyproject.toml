@@ -7,4 +7,5 @@ dependencies = [
     "beautifulsoup4>=4.14.3",
     "packaging>=25.0",
     "requests>=2.32.5",
+    "ttkbootstrap>=1.19.2",
 ]
