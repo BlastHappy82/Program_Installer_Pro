@@ -301,6 +301,102 @@ class Database:
         cursor.execute("DELETE FROM installed_programs")
         self.conn.commit()
     
+    def get_program_by_registry_key(self, registry_key: str) -> Optional[Dict]:
+        """Find a program by its registry key."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM installed_programs WHERE registry_key = ?", (registry_key,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def get_program_by_name(self, name: str) -> Optional[Dict]:
+        """Find a program by its name."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM installed_programs WHERE name = ? OR display_name = ?", (name, name))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    
+    def upsert_installed_program(self, name: str, display_name: Optional[str] = None, version: Optional[str] = None,
+                                  publisher: Optional[str] = None, install_location: Optional[str] = None,
+                                  uninstall_string: Optional[str] = None, registry_key: Optional[str] = None) -> int:
+        """Add or update an installed program, preserving user settings (hidden, parent, links)."""
+        existing = None
+        if registry_key:
+            existing = self.get_program_by_registry_key(registry_key)
+        if not existing and name:
+            existing = self.get_program_by_name(name)
+        
+        cursor = self.conn.cursor()
+        if existing:
+            cursor.execute("""
+                UPDATE installed_programs 
+                SET display_name = ?, version = ?, publisher = ?, install_location = ?, 
+                    uninstall_string = ?, registry_key = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (display_name, version, publisher, install_location, uninstall_string, registry_key, existing['id']))
+            self.conn.commit()
+            return existing['id']
+        else:
+            cursor.execute("""
+                INSERT INTO installed_programs 
+                (name, display_name, version, publisher, install_location, uninstall_string, registry_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (name, display_name, version, publisher, install_location, uninstall_string, registry_key))
+            self.conn.commit()
+            return cursor.lastrowid
+    
+    def get_grouped_programs(self) -> List[Dict]:
+        """Get all programs that are grouped (have a parent)."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT p.*, parent.display_name as parent_name
+            FROM installed_programs p
+            LEFT JOIN installed_programs parent ON p.parent_program_id = parent.id
+            WHERE p.parent_program_id IS NOT NULL
+            ORDER BY parent.display_name, p.display_name
+        """)
+        return [dict(row) for row in cursor.fetchall()]
+    
+    def ungroup_program(self, program_id: int):
+        """Remove a program from its parent group."""
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET parent_program_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (program_id,))
+        self.conn.commit()
+    
+    def mark_all_programs_not_seen(self):
+        """Mark all programs as not seen in current scan."""
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET updated_at = NULL")
+        self.conn.commit()
+    
+    def mark_program_seen(self, program_id: int):
+        """Mark a program as seen in current scan."""
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE installed_programs SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (program_id,))
+        self.conn.commit()
+    
+    def remove_unseen_programs(self):
+        """Remove programs not seen in latest scan (unless they have user settings like hidden/grouped/linked or are parents)."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM installed_programs 
+            WHERE updated_at IS NULL 
+            AND (is_hidden = 0 OR is_hidden IS NULL)
+            AND parent_program_id IS NULL
+            AND (manually_linked = 0 OR manually_linked IS NULL)
+            AND id NOT IN (SELECT DISTINCT parent_program_id FROM installed_programs WHERE parent_program_id IS NOT NULL)
+        """)
+        self.conn.commit()
+    
+    def clear_auto_installer_match(self, program_id: int):
+        """Clear installer match if it was auto-matched (not manually linked)."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE installed_programs 
+            SET matched_installer_id = NULL, has_installer = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND (manually_linked = 0 OR manually_linked IS NULL)
+        """, (program_id,))
+        self.conn.commit()
+    
     def add_to_queue(self, installer_id: int, position: int = None) -> int:
         cursor = self.conn.cursor()
         if position is None:

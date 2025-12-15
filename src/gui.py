@@ -269,7 +269,7 @@ class InstallerManagerGUI:
         filter_combo = ttk.Combobox(
             toolbar,
             textvariable=self.installed_filter_var,
-            values=["All Programs", "Without Installers", "With Installers", "Hidden", "Manually Linked"],
+            values=["All Programs", "Without Installers", "With Installers", "Grouped", "Hidden", "Manually Linked"],
             state="readonly",
             width=18,
             bootstyle="secondary"
@@ -487,7 +487,7 @@ class InstallerManagerGUI:
             scanner = InstalledProgramScanner()
             programs = scanner.scan()
             
-            self.db.clear_installed_programs()
+            self.db.mark_all_programs_not_seen()
             
             installers = self.db.get_all_installers()
             matcher = ProgramMatcher()
@@ -497,7 +497,7 @@ class InstallerManagerGUI:
                 self.installed_tree.delete(item)
             
             for program, matched_installer in matches:
-                prog_id = self.db.add_installed_program(
+                prog_id = self.db.upsert_installed_program(
                     name=program.get('name'),
                     display_name=program.get('display_name'),
                     version=program.get('version'),
@@ -507,24 +507,24 @@ class InstallerManagerGUI:
                     registry_key=program.get('registry_key')
                 )
                 
-                if matched_installer:
+                self.db.mark_program_seen(prog_id)
+                
+                existing_program = self.db.get_installed_program(prog_id)
+                if matched_installer and not existing_program.get('manually_linked'):
                     self.db.match_program_to_installer(prog_id, matched_installer['id'])
-                
-                has_installer = "Yes" if matched_installer else "No"
-                action = "" if matched_installer else "Find Installer"
-                
-                self.root.after(0, lambda p=program, h=has_installer, a=action, m=matched_installer:
-                    self.installed_tree.insert('', 'end', values=(
-                        p.get('display_name') or p.get('name'),
-                        p.get('version') or 'Unknown',
-                        p.get('publisher') or 'Unknown',
-                        h,
-                        a
-                    ), tags=(str(prog_id),)))
+                elif not matched_installer and not existing_program.get('manually_linked'):
+                    self.db.clear_auto_installer_match(prog_id)
             
-            self.root.after(0, lambda: self._finish_installed_scan(len(programs), len([m for _, m in matches if m])))
+            self.db.remove_unseen_programs()
+            
+            self.root.after(0, lambda: self._finish_installed_scan_and_refresh(len(programs), len([m for _, m in matches if m])))
         
         threading.Thread(target=scan, daemon=True).start()
+    
+    def _finish_installed_scan_and_refresh(self, total: int, matched: int):
+        """Finish installed programs scan and refresh the list."""
+        self._finish_installed_scan(total, matched)
+        self._refresh_installed_list()
     
     def _finish_installed_scan(self, total: int, matched: int):
         """Finish installed programs scan."""
@@ -545,6 +545,8 @@ class InstallerManagerGUI:
             programs = self.db.get_manually_linked_programs()
         elif filter_val == "With Installers":
             programs = self.db.get_programs_with_installers()
+        elif filter_val == "Grouped":
+            programs = self.db.get_grouped_programs()
         else:
             programs = self.db.get_all_installed_programs(include_hidden=self.show_hidden)
         
@@ -552,7 +554,9 @@ class InstallerManagerGUI:
             self.installed_tree.delete(item)
         
         for program in programs:
-            if program.get('is_hidden'):
+            if program.get('parent_program_id'):
+                status = f"Grouped under: {program.get('parent_name', 'Unknown')}"
+            elif program.get('is_hidden'):
                 status = "Hidden"
             elif program.get('manually_linked'):
                 status = "Linked"
@@ -602,6 +606,9 @@ class InstallerManagerGUI:
                     
                     menu.add_separator()
                     menu.add_command(label="Set as Parent (Group)", command=lambda: self._set_as_parent(program_id))
+                    
+                    if program.get('parent_program_id'):
+                        menu.add_command(label="Ungroup", command=lambda: self._ungroup_program(program_id))
                     
             menu.post(event.x_root, event.y_root)
     
@@ -663,6 +670,12 @@ class InstallerManagerGUI:
         else:
             Messagebox.show_info("Select multiple programs first, then right-click the parent program", title="Info")
     
+    def _ungroup_program(self, program_id: int):
+        """Remove a program from its parent group."""
+        self.db.ungroup_program(program_id)
+        self._refresh_installed_list()
+        self.status_var.set("Program ungrouped")
+    
     def _add_selected_to_queue(self):
         """Add selected installers to the installation queue."""
         selected = self.installers_tree.selection()
@@ -679,7 +692,7 @@ class InstallerManagerGUI:
                     self.db.add_to_queue(installer['id'])
         
         self._refresh_queue()
-        self.notebook.select(3)
+        self.notebook.select(2)
         self.status_var.set(f"Added {len(selected)} installer(s) to queue")
     
     def _refresh_queue(self):
