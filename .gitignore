@@ -7,6 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+dist-ssr/
 downloads/
 eggs/
 .eggs/
@@ -22,18 +23,26 @@ wheels/
 
 # Virtual environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
 ENV/
 .pythonlibs/
 
-# IDE
+# IDE and Editor files
 .idea/
 .vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
 # Local data
 *.db
@@ -44,10 +53,39 @@ ENV/
 # Logs
 *.log
 logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
 
 # OS files
 .DS_Store
 Thumbs.db
 
+# Node.js (if applicable)
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+*.local
+
+# Vite cache
+.vite/
+
+# Documentation
+docs/_build/
+*.mdx
+
 # Replit
 .cache/
+replit.md
+attached_assets/
+.local/
