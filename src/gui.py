@@ -577,7 +577,9 @@ class InstallerManagerGUI:
         """Show context menu for installed programs."""
         item = self.installed_tree.identify_row(event.y)
         if item:
-            self.installed_tree.selection_set(item)
+            current_selection = self.installed_tree.selection()
+            if item not in current_selection:
+                self.installed_tree.selection_set(item)
             
             menu = tk.Menu(self.root, tearoff=0)
             
